@@ -13,29 +13,29 @@
 
 ## Motivation
 
-To make it seamless for dapps that's depending on blob transaction to migrate from L1 to L2, it's important that L2 also supports blob transaction. This will also make L3 more uniform since they can also use blob transaction for batch submitting, just like L2.
+The proposal aims to integrate BLOB transaction support into the OP Stack. BLOB transactions are gaining popularity on Layer 1 (L1), with applications including BLOB inscriptions, Rollups (as an optional feature), and EthStorage. However, given the high costs associated with L1, it is crucial to implement BLOB transaction support in the OP Stack. This implementation would significantly reduce migration costs for projects and users looking to leverage BLOB transactions in a more cost-effective environment.
 
 ## How It Works
 
-The changes include two parts: optimism and op-geth.
+The proposed changes are implemented across two repositories: `optimism` and `op-geth`.
 
-The optimism part mainly includes:
-1. Add `L2BlobConfig` field to `rollup.Config` so that if configured, L2 blob tx will be supported and optionally the blob can be stored to a [DA provider](https://github.com/ethstorage/da-server) by sequencer.
-   1. There're a bunch of workarounds to make L2 blob tx work for op stack:
-      1. [`BuildBlocksValidator`](https://github.com/blockchaindevsh/optimism/blob/106fbfd5d45efa45d6580cf169a5e053e406b933/op-node/p2p/gossip.go#L250) is modified to support non-zero `BlobGasUsed` and `ExcessBlobGas`.
-      2. [`spanBatchBlobTxData`](https://github.com/blockchaindevsh/optimism/blob/106fbfd5d45efa45d6580cf169a5e053e406b933/op-node/rollup/derive/span_batch_tx.go#L49) is added to support blob tx for span batch.
-      3. [`CheckBlockHash`](https://github.com/blockchaindevsh/optimism/blob/106fbfd5d45efa45d6580cf169a5e053e406b933/op-service/eth/types.go#L218) is modified to support broadcasting blocks with blob tx.
-      4. [`SimpleTxManager.craftTx`](https://github.com/blockchaindevsh/optimism/blob/106fbfd5d45efa45d6580cf169a5e053e406b933/op-service/txmgr/txmgr.go#L252) is modified to support blob tx.
-      5. A `p2p.sync.onlyreqtostatic` flag is [added](https://github.com/ethereum-optimism/optimism/pull/11011) to support fetching blocks from static peers only.
-2. For L2 blob tx, only blob hash is submitted to L1 by op-batcher, so a challenge mechanism for blob is planned.
+Changes in the `optimism` repository::
+1. Addition of `L2BlobConfig` field to `rollup.Config` to enable L2 BLOB transaction support and optional BLOB storage to a Data Availability (DA) [provider]((https://github.com/ethstorage/da-server)) by the sequencer.
+   - Several modifications to facilitate L2 BLOB transactions in OP Stack:
+      - [`BuildBlocksValidator`](https://github.com/blockchaindevsh/optimism/blob/106fbfd5d45efa45d6580cf169a5e053e406b933/op-node/p2p/gossip.go#L250) updated to support non-zero `BlobGasUsed` and `ExcessBlobGas`.
+      - Introduction of [`spanBatchBlobTxData`](https://github.com/blockchaindevsh/optimism/blob/106fbfd5d45efa45d6580cf169a5e053e406b933/op-node/rollup/derive/span_batch_tx.go#L49) for BLOB transaction support in span batch.
+      - [`CheckBlockHash`](https://github.com/blockchaindevsh/optimism/blob/106fbfd5d45efa45d6580cf169a5e053e406b933/op-service/eth/types.go#L218) modified to enable broadcasting blocks with BLOB transactions.
+      - [`SimpleTxManager.craftTx`](https://github.com/blockchaindevsh/optimism/blob/106fbfd5d45efa45d6580cf169a5e053e406b933/op-service/txmgr/txmgr.go#L252) updated to accommodate BLOB transactions.
+      - [Addition]((https://github.com/ethereum-optimism/optimism/pull/11011)) of `p2p.sync.onlyreqtostatic` flag is to allow fetching blocks exclusively from static peers.
+2. Implementation of a challenge mechanism for BLOB transactions is planned, as only BLOB hashes are submitted to L1 by op-batcher.
 
 
-The op-geth part mainly includes:
-1. Add `EnableL2Blob` field to `OptimismConfig` so that if configured, L2 blob tx will be supported.
-2. Add `blobs` field to `RollupCostData` and update [`newL1CostFuncEcotone`](https://github.com/blockchaindevsh/op-geth/blob/19971ab7ffd0b6879796daf8c05b3206e279f15d/core/types/rollup_cost.go#L191) so that a blob tx will have two extra fees: da fee and da proof fee.
-3. Fix [`Transaction.RollupCostData`](https://github.com/blockchaindevsh/op-geth/blob/19971ab7ffd0b6879796daf8c05b3206e279f15d/core/types/transaction.go#L374) so that the result is consistent when called from worker and state processor.
-4. [`commitBlobTransaction`](https://github.com/blockchaindevsh/op-geth/blob/19971ab7ffd0b6879796daf8c05b3206e279f15d/miner/worker.go#L806) is modified to support blob tx without blobs when deriving.
-5. Port changes from upstream geth to support estimate gas for blob tx.
+Changes in the `op-geth` repository:
+1. Addition of `EnableL2Blob` field to `OptimismConfig` to enable L2 BLOB transaction support.
+2. Inclusion of `blobs` field to `RollupCostData` and update of [`newL1CostFuncEcotone`](https://github.com/blockchaindevsh/op-geth/blob/19971ab7ffd0b6879796daf8c05b3206e279f15d/core/types/rollup_cost.go#L191) to introduce additional DA fees for BLOB transactions.
+3. Correction of [`Transaction.RollupCostData`](https://github.com/blockchaindevsh/op-geth/blob/19971ab7ffd0b6879796daf8c05b3206e279f15d/core/types/transaction.go#L374) to ensure consistent results when called from worker and state processor.
+4. Modification of [`commitBlobTransaction`](https://github.com/blockchaindevsh/op-geth/blob/19971ab7ffd0b6879796daf8c05b3206e279f15d/miner/worker.go#L806) to support BLOB transactions without blobs during derivation.
+5. Integration of upstream geth changes to support gas estimation for BLOB transactions.
 
 ## Reference Implementation
 

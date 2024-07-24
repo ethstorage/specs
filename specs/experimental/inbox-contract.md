@@ -21,7 +21,8 @@ This specification aims to allow the batch inbox to be a contract, enabling cust
 The integration process consists of four primary components:
 1. Replacement of the [`BatchInboxAddress`](https://github.com/ethereum-optimism/optimism/blob/db107794c0b755bc38a8c62f11c49320c95c73db/op-chain-ops/genesis/config.go#L77) with an inbox contract: The existing `BatchInboxAddress`, which currently points to an Externally Owned Account (EOA), will be replaced by a smart contract. This new inbox contract will be responsible for verifying and enforcing batch submission conditions.
 2. Modification of the op-node derivation process: The op-node will be updated to exclude failed batch transactions during the derivation process. This change ensures that only successfully executed batch transactions are processed and included in the derived state. 
-3. Modification of the op-batcher submission process: The op-batcher will be updated to resend failed batch transactions.
+3. Modification of the op-batcher submission process: The op-batcher will be updated to [call `recordFailedTx`](https://github.com/blockchaindevsh/optimism/blob/02e3b7248f1b590a2adf1f81488829760fa2ba03/op-batcher/batcher/driver.go#L537) for failed batch transactions. This modification ensures that the data contained in failed transactions will be resubmitted automatically.
+   1. Most failures will be detected during the [`EstimateGas`](https://github.com/ethereum-optimism/optimism/blob/8f516faf42da416c02355f9981add3137a3db190/op-service/txmgr/txmgr.go#L266) call. However, under certain race conditions, failures may occur after the transaction has been included in a block.
 4. To implement this feature as an optional setting, we introduced a `UseInboxContract` boolean field in both the `DeployConfig` and `rollup.Config` structures. When `UseInboxContract` is set to false, the system maintains its previous behavior, ensuring backward compatibility.
 
 These modifications aim to enhance the security and efficiency of the batch submission and processing pipeline, allowing for more flexible and customizable conditions while maintaining the integrity of the derived state.
@@ -35,7 +36,7 @@ A new function `setBatchInbox` will be introduced to the `SystemConfig` contract
 /// @notice Updates the batch inbox address. Can only be called by the owner.
 /// @param _batchInbox New batch inbox address.
 function setBatchInbox(address _batchInbox) external onlyOwner {
-    _setBatchInbox(_unsafeBlockSigner);
+    _setBatchInbox(_batchInbox);
 }
 
 /// @notice Updates the batch inbox address.

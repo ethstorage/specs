@@ -18,14 +18,46 @@ This specification aims to allow the batch inbox to be a contract, enabling cust
 
 ## How It Works
 
-The integration process consists of two primary components:
+The integration process consists of four primary components:
 1. Replacement of the [`BatchInboxAddress`](https://github.com/ethereum-optimism/optimism/blob/db107794c0b755bc38a8c62f11c49320c95c73db/op-chain-ops/genesis/config.go#L77) with an inbox contract: The existing `BatchInboxAddress`, which currently points to an Externally Owned Account (EOA), will be replaced by a smart contract. This new inbox contract will be responsible for verifying and enforcing batch submission conditions.
-2. Modification of the op-node derivation process: The op-node will be updated to exclude failed batch transactions during the derivation process. This change ensures that only successfully executed batch transactions are processed and included in the derived state.
+2. Modification of the op-node derivation process: The op-node will be updated to exclude failed batch transactions during the derivation process. This change ensures that only successfully executed batch transactions are processed and included in the derived state. 
+3. Modification of the op-batcher submission process: The op-batcher will be updated to resend failed batch transactions.
+4. To implement this feature as an optional setting, we introduced a `UseInboxContract` boolean field in both the `DeployConfig` and `rollup.Config` structures. When `UseInboxContract` is set to false, the system maintains its previous behavior, ensuring backward compatibility.
 
 These modifications aim to enhance the security and efficiency of the batch submission and processing pipeline, allowing for more flexible and customizable conditions while maintaining the integrity of the derived state.
 
 
+## Migration Process
+
+A new function `setBatchInbox` will be introduced to the `SystemConfig` contract, enabling dynamic updates to the [`BatchInboxAddress`](https://github.com/ethereum-optimism/optimism/blob/8b1b67021fb77d7e33118b749679480532fce976/op-node/rollup/types.go#L120):
+
+```solidity
+/// @notice Updates the batch inbox address. Can only be called by the owner.
+/// @param _batchInbox New batch inbox address.
+function setBatchInbox(address _batchInbox) external onlyOwner {
+    _setBatchInbox(_unsafeBlockSigner);
+}
+
+/// @notice Updates the batch inbox address.
+/// @param _batchInbox New batch inbox address.
+function _setBatchInbox(address _batchInbox) internal {
+    Storage.setAddress(BATCH_INBOX_SLOT, _batchInbox);
+
+    bytes memory data = abi.encode(_batchInbox, _batchInbox.code.length > 0);
+    emit ConfigUpdate(VERSION, UpdateType.BATCH_INBOX, data);
+}
+
+enum UpdateType {
+    ...
+    BATCH_INBOX
+}
+```
+
+The `UseInboxContract` flag is automatically set to true for both the `op-node` and `op-batcher` components if `_batchInbox` corresponds to a valid contract address. If `_batchInbox` is not a valid contract address, the flag is set to false.
+
 ## Reference Implementation
 
 1. [example inbox contract for EthStorage](https://github.com/blockchaindevsh/es-op-batchinbox/blob/main/src/BatchInbox.sol)
-2. [op-node derive changes](https://github.com/ethstorage/optimism/pull/22)
+2. [op-node & op-batcher changes](https://github.com/blockchaindevsh/optimism/compare/5137f3b74c6ebcac4f0f5a118b0f4909df03aec6...02e3b7248f1b590a2adf1f81488829760fa2ba03)
+
+TODO: implement `Migration Process` mentioned above.

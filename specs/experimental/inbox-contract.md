@@ -1,5 +1,16 @@
 # Inbox Contract
 
+<!-- START doctoc generated TOC please keep comment here to allow auto update -->
+<!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
+**Table of Contents**
+- [Inbox Contract](#inbox-contract)
+  - [Motivation](#motivation)
+  - [How It Works](#how-it-works)
+  - [Migration Process](#migration-process)
+    - [How `op-node` knows the canonical batch inbox](#how-op-node-knows-the-canonical-batch-inbox)
+    - [How `op-batcher` knows canonical batch inbox](#how-op-batcher-knows-canonical-batch-inbox)
+  - [Reference Implementation](#reference-implementation)
+
 ## Motivation
 
 The batch inbox is currently an Externally Owned Account (EOA), which has both advantages and disadvantages:
@@ -20,7 +31,7 @@ This specification aims to allow the batch inbox to be a contract, enabling cust
 
 The integration process consists of four primary components:
 1. Replacement of the [`BatchInboxAddress`](https://github.com/ethereum-optimism/optimism/blob/db107794c0b755bc38a8c62f11c49320c95c73db/op-chain-ops/genesis/config.go#L77) with an inbox contract: The existing `BatchInboxAddress`, which currently points to an Externally Owned Account (EOA), will be replaced by a smart contract. This new inbox contract will be responsible for verifying and enforcing batch submission conditions.
-2. Modification of the op-node derivation process: The op-node will be updated to exclude failed batch transactions during the derivation process. This change ensures that only successfully executed batch transactions are processed and included in the derived state. 
+2. Modification of the `op-node` derivation process: The `op-node` will be updated to exclude failed batch transactions during the derivation process. This change ensures that only successfully executed batch transactions are processed and included in the derived state. 
 3. Modification of the op-batcher submission process: The op-batcher will be updated to [call `recordFailedTx`](https://github.com/blockchaindevsh/optimism/blob/02e3b7248f1b590a2adf1f81488829760fa2ba03/op-batcher/batcher/driver.go#L537) for failed batch transactions. This modification ensures that the data contained in failed transactions will be resubmitted automatically.
    1. Most failures will be detected during the [`EstimateGas`](https://github.com/ethereum-optimism/optimism/blob/8f516faf42da416c02355f9981add3137a3db190/op-service/txmgr/txmgr.go#L266) call. However, under certain race conditions, failures may occur after the transaction has been included in a block.
 4. To implement this feature as an optional setting, we introduced a `UseInboxContract` boolean field in both the `DeployConfig` and `rollup.Config` structures. When `UseInboxContract` is set to false, the system maintains its previous behavior, ensuring backward compatibility.
@@ -55,6 +66,19 @@ enum UpdateType {
 ```
 
 The `UseInboxContract` flag is automatically set to true for both the `op-node` and `op-batcher` components if `_batchInbox` corresponds to a valid contract address. If `_batchInbox` is not a valid contract address, the flag is set to false.
+
+### How `op-node` knows the canonical batch inbox
+
+Under normal conditions, `op-node` knows the canonical batch inbox through the derivation pipeline:
+1. The `L1Traversal` componenet first identifies the L1 `SystemConfig` changes while traversing the L1 block, via [`UpdateSystemConfigWithL1Receipts`](https://github.com/ethereum-optimism/optimism/blob/71928829ca7ece48152159daa1d231eac2df03b3/op-node/rollup/derive/l1_traversal.go#L78). This includes batcher and inbox changes.
+   1. The [`ProcessSystemConfigUpdateLogEvent`](https://github.com/ethereum-optimism/optimism/blob/71928829ca7ece48152159daa1d231eac2df03b3/op-node/rollup/derive/system_config.go#L59) function will be modified to parse the newly added inbox change.
+2. The `L1Retrieval` component then fetches the canonical batch inbox from the `L1Traversal` componenet and [pass](https://github.com/ethereum-optimism/optimism/blob/71928829ca7ece48152159daa1d231eac2df03b3/op-node/rollup/derive/l1_retrieval.go#L57) it to the `DataSourceFactory` component, via `OpenData` function, similar to how [`SystemConfig.BatcherAddr`](https://github.com/ethereum-optimism/optimism/blob/71928829ca7ece48152159daa1d231eac2df03b3/op-service/eth/types.go#L382) is handled.
+
+During L2 reorganization, `op-node` knows the canonical batch inbox using the `SystemConfig` parameter of [`ResettableStage.Reset(context.Context, eth.L1BlockRef, eth.SystemConfig)`](https://github.com/ethereum-optimism/optimism/blob/71928829ca7ece48152159daa1d231eac2df03b3/op-node/rollup/derive/pipeline.go#L38) function.
+
+### How `op-batcher` knows canonical batch inbox
+
+Immediately before submitting a new batch, `op-batcher` fetches the current inbox address from L1 and submits to that address. After the transaction is successfully included in L1 at block `N`, `op-batcher` verifies that the inbox address hasn't changed at block `N`. If the address has changed, it resubmits the batch to the new address.
 
 ## Reference Implementation
 

@@ -117,7 +117,7 @@ enum UpdateType {
 
 ### How `op-node` knows the canonical batch inbox
 
-We define the canonical batch inbox at a specific L2 block(denoted as `bn`) as the batch inbox corresponding to the L1 block that serves as the origin of `bn`.
+We define that the canonical batch inbox at a specific L2 block is the batch inbox of `SystemConfig` of the origin of the L2 block.
 
 Under normal conditions, `op-node` knows the canonical batch inbox through the derivation pipeline:
 1. The `L1Traversal` component first identifies the L1 `SystemConfig` changes while traversing the L1 block, via [`UpdateSystemConfigWithL1Receipts`](https://github.com/ethereum-optimism/optimism/blob/71928829ca7ece48152159daa1d231eac2df03b3/op-node/rollup/derive/l1_traversal.go#L78).

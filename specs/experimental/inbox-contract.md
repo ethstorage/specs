@@ -9,6 +9,7 @@
   - [Supporting Dynamic Updates to Inbox Address](#supporting-dynamic-updates-to-inbox-address)
     - [SystemConfig](#systemconfig)
       - [setBatchInbox](#setbatchinbox)
+      - [initialize](#initialize)
       - [UpdateType](#updatetype)
     - [How `op-node` knows the canonical batch inbox](#how-op-node-knows-the-canonical-batch-inbox)
     - [How `op-batcher` knows canonical batch inbox](#how-op-batcher-knows-canonical-batch-inbox)
@@ -49,6 +50,7 @@ These modifications aim to enhance the security and efficiency of the batch subm
 
 The `SystemConfig` is the source of truth for the address of inbox. It stores information about the inbox address and passes the information to L2 as well. 
 
+
 #### setBatchInbox
 
 A new function `setBatchInbox` is introduced to the `SystemConfig` contract, enabling dynamic updates to the inbox:
@@ -69,6 +71,34 @@ function _setBatchInbox(address _batchInbox) internal {
     emit ConfigUpdate(VERSION, UpdateType.BATCH_INBOX, data);
 }
 
+```
+
+
+#### initialize
+
+The `SystemConfig` now emits an event when the inbox is initialized, while retaining its existing support for inbox configuration during initialization.
+
+```solidity
+function initialize(
+    address _owner,
+    uint32 _basefeeScalar,
+    uint32 _blobbasefeeScalar,
+    bytes32 _batcherHash,
+    uint64 _gasLimit,
+    address _unsafeBlockSigner,
+    ResourceMetering.ResourceConfig memory _config,
+    address _batchInbox,
+    SystemConfig.Addresses memory _addresses
+)
+    public
+    initializer
+{
+    ...
+    // Storage.setAddress(BATCH_INBOX_SLOT, _batchInbox);
+    // initialize inbox by `_setBatchInbox` so that an event is emitted.
+    _setBatchInbox(_batchInbox);
+    ...
+}
 ```
 
 #### UpdateType

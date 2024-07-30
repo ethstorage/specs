@@ -36,7 +36,7 @@ This specification aims to allow the batch inbox to be a contract, enabling cust
 ## How It Works
 
 The integration process consists of three primary components:
-1. Replacement of the [`BatchInboxAddress`](https://github.com/ethereum-optimism/optimism/blob/db107794c0b755bc38a8c62f11c49320c95c73db/op-chain-ops/genesis/config.go#L77) with an inbox contract: The existing `BatchInboxAddress`, which currently points to an Externally Owned Account (EOA), will be replaced by a smart contract. This new inbox contract will be responsible for verifying and enforcing batch submission conditions.
+1. The [`BatchInboxAddress`](https://github.com/ethereum-optimism/optimism/blob/db107794c0b755bc38a8c62f11c49320c95c73db/op-chain-ops/genesis/config.go#L77) can now be set to either an Externally Owned Account (EOA) or a smart contract. When a contract is used, it assumes responsibility for verifying and enforcing batch submission conditions.
 2. Modification of the `op-node` derivation process: The `op-node` will be updated to exclude failed batch transactions during the derivation process. This change ensures that only successfully executed batch transactions are processed and included in the derived state. 
 3. Modification of the op-batcher submission process: The op-batcher will be updated to [call `recordFailedTx`](https://github.com/blockchaindevsh/optimism/blob/02e3b7248f1b590a2adf1f81488829760fa2ba03/op-batcher/batcher/driver.go#L537) for failed batch transactions. This modification ensures that the data contained in failed transactions will be resubmitted automatically.
    1. Most failures will be detected during the [`EstimateGas`](https://github.com/ethereum-optimism/optimism/blob/8f516faf42da416c02355f9981add3137a3db190/op-service/txmgr/txmgr.go#L266) call. However, under certain race conditions, failures may occur after the transaction has been included in a block.
@@ -133,7 +133,7 @@ Immediately before submitting a new batch, `op-batcher` fetches the current inbo
 
 ## Upgrade
 
-Existing OP Stack instances need to upgrade the `SystemConfig` in order to use this feature.
+Existing OP Stack instances need to upgrade the `SystemConfig` and set an inbox contract in order to use this feature.
 
 ## Reference Implementation
 

@@ -6,7 +6,7 @@
 - [Inbox Contract](#inbox-contract)
   - [Motivation](#motivation)
   - [How It Works](#how-it-works)
-  - [Dynamic Updates](#dynamic-updates)
+  - [Supporting Dynamic Updates to Inbox Address](#supporting-dynamic-updates-to-inbox-address)
     - [SystemConfig](#systemconfig)
       - [setBatchInbox](#setbatchinbox)
       - [UpdateType](#updatetype)
@@ -43,7 +43,7 @@ The integration process consists of three primary components:
 These modifications aim to enhance the security and efficiency of the batch submission and processing pipeline, allowing for more flexible and customizable conditions while maintaining the integrity of the derived state.
 
 
-## Dynamic Updates
+## Supporting Dynamic Updates to Inbox Address
 
 ### SystemConfig
 
@@ -90,12 +90,12 @@ enum UpdateType {
 We define the canonical batch inbox at L2 block `n` as the batch inbox at the L1 origin of L2 block `n`.
 
 Under normal conditions, `op-node` knows the canonical batch inbox through the derivation pipeline:
-1. The `L1Traversal` componenet first identifies the L1 `SystemConfig` changes while traversing the L1 block, via [`UpdateSystemConfigWithL1Receipts`](https://github.com/ethereum-optimism/optimism/blob/71928829ca7ece48152159daa1d231eac2df03b3/op-node/rollup/derive/l1_traversal.go#L78). This includes batcher and inbox changes.
+1. The `L1Traversal` component first identifies the L1 `SystemConfig` changes while traversing the L1 block, via [`UpdateSystemConfigWithL1Receipts`](https://github.com/ethereum-optimism/optimism/blob/71928829ca7ece48152159daa1d231eac2df03b3/op-node/rollup/derive/l1_traversal.go#L78).
    1. The [`ProcessSystemConfigUpdateLogEvent`](https://github.com/ethereum-optimism/optimism/blob/71928829ca7ece48152159daa1d231eac2df03b3/op-node/rollup/derive/system_config.go#L59) function will be modified to parse the newly added inbox change.
 2. The `L1Retrieval` component then fetches the canonical batch inbox from the `L1Traversal` componenet and [pass](https://github.com/ethereum-optimism/optimism/blob/71928829ca7ece48152159daa1d231eac2df03b3/op-node/rollup/derive/l1_retrieval.go#L57) it to the `DataSourceFactory` component, via `OpenData` function, similar to how [`SystemConfig.BatcherAddr`](https://github.com/ethereum-optimism/optimism/blob/71928829ca7ece48152159daa1d231eac2df03b3/op-service/eth/types.go#L382) is handled.
-3. The `FetchingAttributesBuilder` component is updated to incorporate the canonical batch inbox into the `DepositTx`, via [`L1InfoDeposit`](https://github.com/ethereum-optimism/optimism/blob/71928829ca7ece48152159daa1d231eac2df03b3/op-node/rollup/derive/l1_block_info.go#L263). This modified `DepositTx` is subsequently used to calculate the `SystemConfig` during L2 chain reorganization.
+3. The `FetchingAttributesBuilder` component is updated to incorporate the canonical batch inbox into the `DepositTx`, via [`L1InfoDeposit`](https://github.com/ethereum-optimism/optimism/blob/71928829ca7ece48152159daa1d231eac2df03b3/op-node/rollup/derive/l1_block_info.go#L263). This modified `DepositTx` is subsequently used to obtain the `SystemConfig` during L2 chain reorganization.
 
-During L2 reorganization, `op-node` knows the canonical batch inbox using the `SystemConfig` parameter of [`ResettableStage.Reset(context.Context, eth.L1BlockRef, eth.SystemConfig)`](https://github.com/ethereum-optimism/optimism/blob/71928829ca7ece48152159daa1d231eac2df03b3/op-node/rollup/derive/pipeline.go#L38) function.
+During L2 reorganization, `op-node` knows the canonical batch inbox using the `SystemConfig` parameter of [`ResettableStage.Reset(context.Context, eth.L1BlockRef, eth.SystemConfig)`](https://github.com/ethereum-optimism/optimism/blob/71928829ca7ece48152159daa1d231eac2df03b3/op-node/rollup/derive/pipeline.go#L38) function, where `SystemConfig` is derived from the `DepositTx` of the corresponding L2 block.
 
 ### How `op-batcher` knows canonical batch inbox
 

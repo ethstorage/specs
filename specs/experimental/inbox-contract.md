@@ -11,6 +11,9 @@
       - [setBatchInbox](#setbatchinbox)
       - [initialize](#initialize)
       - [UpdateType](#updatetype)
+    - [L1Block](#l1block)
+      - [batchInbox](#batchinbox)
+      - [setL1BlockValuesEcotone](#setl1blockvaluesecotone)
     - [How `op-node` knows the canonical batch inbox](#how-op-node-knows-the-canonical-batch-inbox)
     - [How `op-batcher` knows canonical batch inbox](#how-op-batcher-knows-canonical-batch-inbox)
   - [Upgrade](#upgrade)
@@ -117,6 +120,31 @@ enum UpdateType {
 }
 ```
 
+### L1Block
+
+The `L1Block` stores Layer 1 (L1) related information on Layer 2 (L2). It is extended to also store the inbox address.
+
+#### batchInbox
+
+A new field `batchInbox` is added to the `L1Block`:
+
+```solidity
+    /// @notice The canonical batch inbox.
+    bytes32 public batchInbox;
+```
+
+#### setL1BlockValuesEcotone
+
+This function stores Layer 1 (L1) block values for Layer 2 (L2) since the Ecotone upgrade of the OP Stack. It is enhanced to also store the inbox address.
+
+```solidity
+function setL1BlockValuesEcotone() external {
+    ...
+    sstore(batchInbox.slot, calldataload(164)) // bytes32
+}
+
+```
+
 ### How `op-node` knows the canonical batch inbox
 
 We define that the canonical batch inbox at a specific L2 block is the batch inbox of `SystemConfig` of the origin of the L2 block.
@@ -135,10 +163,11 @@ Immediately before submitting a new batch, `op-batcher` fetches the current inbo
 
 ## Upgrade
 
-Existing OP Stack instances need to upgrade the `SystemConfig` and set an inbox contract in order to use this feature.
+To use this feature, existing OP Stack instances must complete two steps:
+1. Upgrade the `SystemConfig` and set an inbox contract on L1.
+2. Upgrade the `L1Blocck` on L2.
 
 ## Security Considerations
-
 
 ### Inbox Sender
 

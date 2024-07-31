@@ -165,7 +165,7 @@ Immediately before submitting a new batch, `op-batcher` fetches the current inbo
 
 To use this feature, existing OP Stack instances must complete two steps:
 1. Upgrade the `SystemConfig` and set an inbox contract on L1.
-2. Upgrade the `L1Blocck` on L2.
+2. Upgrade the `L1Block` on L2.
 
 ## Security Considerations
 

@@ -14,6 +14,8 @@
     - [How `op-node` knows the canonical batch inbox](#how-op-node-knows-the-canonical-batch-inbox)
     - [How `op-batcher` knows canonical batch inbox](#how-op-batcher-knows-canonical-batch-inbox)
   - [Upgrade](#upgrade)
+  - [Security Considerations](#security-considerations)
+    - [Inbox Sender](#inbox-sender)
   - [Reference Implementation](#reference-implementation)
 
 ## Motivation
@@ -135,9 +137,17 @@ Immediately before submitting a new batch, `op-batcher` fetches the current inbo
 
 Existing OP Stack instances need to upgrade the `SystemConfig` and set an inbox contract in order to use this feature.
 
+## Security Considerations
+
+
+### Inbox Sender
+
+The inbox contract is a special contract that, if invoked by the batcher, all of its calldata / blob will be used as L2 derivation data, unless the transaction fails. In order to invoke and modify the state of the inbox contract, it is recommended to use a non-batcher sender.
+
+
 ## Reference Implementation
 
 1. [example inbox contract for EthStorage](https://github.com/blockchaindevsh/es-op-batchinbox/blob/main/src/BatchInbox.sol)
 2. [op-node & op-batcher changes](https://github.com/blockchaindevsh/optimism/compare/5137f3b74c6ebcac4f0f5a118b0f4909df03aec6...02e3b7248f1b590a2adf1f81488829760fa2ba03)
 
-TODO: implement `Dynamic Updates` mentioned above.
+TODO: implement `Supporting Dynamic Updates to Inbox Address` mentioned above.

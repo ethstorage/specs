@@ -167,6 +167,13 @@ To use this feature, existing OP Stack instances must complete two steps:
 1. Upgrade the `SystemConfig` and set an inbox contract on L1.
 2. Upgrade the `L1Block` on L2.
 
+Note that according to the [Optimism Style Guide](https://github.com/ethereum-optimism/optimism/blob/9d31040ecf8590423adf267ad24b03bc1bf7273b/packages/contracts-bedrock/STYLE_GUIDE.md), The process for upgrading the implementation is as follows:
+1. Upgrade the implementation to the `StorageSetter` contract.
+2. Use that to set the initialized slot (typically slot 0) to zero.
+3. Upgrade the implementation to the desired new implementation and initialize it.
+
+For a practical example of this process, refer to [this](https://github.com/ethereum-optimism/superchain-ops/blob/55e9520e27c7e916d8992ce351c6d5cfa8a511d8/tasks/eth/009-fp-upgrade/EXEC.md) execution document in the Optimism Superchain Operations repository.
+
 ## Security Considerations
 
 ### Inbox Sender

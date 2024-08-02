@@ -122,7 +122,7 @@ enum UpdateType {
 
 ### L1Block
 
-The `L1Block` stores Layer 1 (L1) related information on Layer 2 (L2). It is extended to also store the inbox address.
+The `L1Block` stores Layer 1 (L1) related information on Layer 2 (L2). It is extended to store the dynamic inbox address.
 
 #### batchInbox
 

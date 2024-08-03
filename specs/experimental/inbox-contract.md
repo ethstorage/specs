@@ -1,29 +1,29 @@
+<!-- omit in toc -->
 # Inbox Contract
 
 <!-- START doctoc generated TOC please keep comment here to allow auto update -->
 <!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
 **Table of Contents**
-- [Inbox Contract](#inbox-contract)
-  - [Motivation](#motivation)
-  - [How It Works](#how-it-works)
-  - [Supporting Dynamic Updates to Inbox Address](#supporting-dynamic-updates-to-inbox-address)
-    - [SystemConfig](#systemconfig)
-      - [setBatchInbox](#setbatchinbox)
-      - [initialize](#initialize)
-      - [UpdateType](#updatetype)
-    - [L1 Info Deposit Transaction](#l1-info-deposit-transaction)
-    - [L1Block](#l1block)
-      - [batchInbox](#batchinbox)
-      - [setL1BlockValuesEcotone](#setl1blockvaluesecotone)
-    - [How `op-node` knows the canonical batch inbox](#how-op-node-knows-the-canonical-batch-inbox)
-    - [How `op-batcher` knows canonical batch inbox](#how-op-batcher-knows-canonical-batch-inbox)
-  - [Upgrade](#upgrade)
-    - [L1Block Deployment](#l1block-deployment)
-    - [L1Block Proxy Update](#l1block-proxy-update)
-    - [SystemConfig Upgrade](#systemconfig-upgrade)
-  - [Security Considerations](#security-considerations)
-    - [Inbox Sender](#inbox-sender)
-  - [Reference Implementation](#reference-implementation)
+- [Motivation](#motivation)
+- [How It Works](#how-it-works)
+- [Supporting Dynamic Updates to Inbox Address](#supporting-dynamic-updates-to-inbox-address)
+  - [SystemConfig](#systemconfig)
+    - [setBatchInbox](#setbatchinbox)
+    - [initialize](#initialize)
+    - [UpdateType](#updatetype)
+  - [L1 Info Deposit Transaction](#l1-info-deposit-transaction)
+  - [L1Block](#l1block)
+    - [batchInbox](#batchinbox)
+    - [setL1BlockValuesEcotone](#setl1blockvaluesecotone)
+  - [How `op-node` knows the canonical batch inbox](#how-op-node-knows-the-canonical-batch-inbox)
+  - [How `op-batcher` knows canonical batch inbox](#how-op-batcher-knows-canonical-batch-inbox)
+- [Upgrade](#upgrade)
+  - [L1Block Deployment](#l1block-deployment)
+  - [L1Block Proxy Update](#l1block-proxy-update)
+  - [SystemConfig Upgrade](#systemconfig-upgrade)
+- [Security Considerations](#security-considerations)
+  - [Inbox Sender](#inbox-sender)
+- [Reference Implementation](#reference-implementation)
 
 ## Motivation
 
@@ -196,7 +196,7 @@ func (info *L1BlockInfo) marshalBinaryInboxFork() ([]byte, error) {
       return nil, err
     }
     // This is where marshalBinaryInboxFork differs from marshalBinaryEcotone
-    if err := solabi.WriteHash(w, info.BatchInbox); err != nil {
+    if err := solabi.WriteAddress(w, info.BatchInbox); err != nil {
       return nil, err
     }
     return w.Bytes(), nil
@@ -291,7 +291,7 @@ RPC access to the derivation pipeline and make the upgrade transactions non dete
 
 ### SystemConfig Upgrade
 
-Finally, upgrade the `SystemConfig` and set an inbox contract on L1.
+Finally, to dynamically change the inbox address, `SystemConfig` on L1 will be upgraded to accept a new inbox address.
 
 Note that according to the [Optimism Style Guide](https://github.com/ethereum-optimism/optimism/blob/9d31040ecf8590423adf267ad24b03bc1bf7273b/packages/contracts-bedrock/STYLE_GUIDE.md), The process for upgrading the implementation is as follows:
 1. Upgrade the implementation to the `StorageSetter` contract.

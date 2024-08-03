@@ -11,6 +11,7 @@
       - [setBatchInbox](#setbatchinbox)
       - [initialize](#initialize)
       - [UpdateType](#updatetype)
+    - [L1 Info Deposit Transaction](#l1-info-deposit-transaction)
     - [L1Block](#l1block)
       - [batchInbox](#batchinbox)
       - [setL1BlockValuesEcotone](#setl1blockvaluesecotone)
@@ -117,6 +118,85 @@ enum UpdateType {
     GAS_LIMIT,
     UNSAFE_BLOCK_SIGNER,
     BATCH_INBOX
+}
+```
+
+### L1 Info Deposit Transaction
+
+The [`L1InfoDeposit`](https://github.com/ethereum-optimism/optimism/blob/5e317379fae65b76f5a6ee27581f0e62d2fe017a/op-node/rollup/derive/l1_block_info.go#L264) function creates a L1 Info deposit transaction based on the L1 block. It is extended to add an additional `batchInbox` parameter for the [`setL1BlockValuesEcotone`](https://github.com/ethereum-optimism/optimism/blob/5e317379fae65b76f5a6ee27581f0e62d2fe017a/packages/contracts-bedrock/src/L2/L1Block.sol#L136) function after the inbox contract feature is activated.
+
+```golang
+func L1InfoDeposit(rollupCfg *rollup.Config, sysCfg eth.SystemConfig, seqNumber uint64, block eth.BlockInfo, l2BlockTime uint64) (*types.DepositTx, error) {
+    ...
+    if isInboxForkButNotFirstBlock(rollupCfg, l2BlockTime) {
+        l1BlockInfo.BatchInbox = sysCfg.BatchInbox
+        l1BlockInfo.BlobBaseFee = block.BlobBaseFee()
+        if l1BlockInfo.BlobBaseFee == nil {
+          // The L2 spec states to use the MIN_BLOB_GASPRICE from EIP-4844 if not yet active on L1.
+          l1BlockInfo.BlobBaseFee = big.NewInt(1)
+        }
+        scalars, err := sysCfg.EcotoneScalars()
+        if err != nil {
+          return nil, err
+        }
+        l1BlockInfo.BlobBaseFeeScalar = scalars.BlobBaseFeeScalar
+        l1BlockInfo.BaseFeeScalar = scalars.BaseFeeScalar
+        // marshalBinaryInboxFork adds an additional `batchInbox` parameter based on marshalBinaryEcotone.
+        out, err := l1BlockInfo.marshalBinaryInboxFork()
+        if err != nil {
+          return nil, fmt.Errorf("failed to marshal InboxFork l1 block info: %w", err)
+        }
+        data = out
+    } else if isEcotoneButNotFirstBlock(rollupCfg, l2BlockTime) {
+    ...
+}
+```
+
+The `marshalBinaryInboxFork` function is added to [`L1BlockInfo`](https://github.com/ethereum-optimism/optimism/blob/5e317379fae65b76f5a6ee27581f0e62d2fe017a/op-node/rollup/derive/l1_block_info.go#L41). This new function incorporates an additional `batchInbox` parameter for the [`setL1BlockValuesEcotone`](https://github.com/ethereum-optimism/optimism/blob/5e317379fae65b76f5a6ee27581f0e62d2fe017a/packages/contracts-bedrock/src/L2/L1Block.sol#L136) function:
+
+```golang
+func (info *L1BlockInfo) marshalBinaryInboxFork() ([]byte, error) {
+    w := bytes.NewBuffer(make([]byte, 0, L1InfoEcotoneLen))
+    if err := solabi.WriteSignature(w, L1InfoFuncEcotoneBytes4); err != nil {
+      return nil, err
+    }
+    if err := binary.Write(w, binary.BigEndian, info.BaseFeeScalar); err != nil {
+      return nil, err
+    }
+    if err := binary.Write(w, binary.BigEndian, info.BlobBaseFeeScalar); err != nil {
+      return nil, err
+    }
+    if err := binary.Write(w, binary.BigEndian, info.SequenceNumber); err != nil {
+      return nil, err
+    }
+    if err := binary.Write(w, binary.BigEndian, info.Time); err != nil {
+      return nil, err
+    }
+    if err := binary.Write(w, binary.BigEndian, info.Number); err != nil {
+      return nil, err
+    }
+    if err := solabi.WriteUint256(w, info.BaseFee); err != nil {
+      return nil, err
+    }
+    blobBasefee := info.BlobBaseFee
+    if blobBasefee == nil {
+      blobBasefee = big.NewInt(1) // set to 1, to match the min blob basefee as defined in EIP-4844
+    }
+    if err := solabi.WriteUint256(w, blobBasefee); err != nil {
+      return nil, err
+    }
+    if err := solabi.WriteHash(w, info.BlockHash); err != nil {
+      return nil, err
+    }
+    // ABI encoding will perform the left-padding with zeroes to 32 bytes, matching the "batcherHash" SystemConfig format and version 0 byte.
+    if err := solabi.WriteAddress(w, info.BatcherAddr); err != nil {
+      return nil, err
+    }
+    // This is where marshalBinaryInboxFork differs from marshalBinaryEcotone
+    if err := solabi.WriteHash(w, info.BatchInbox); err != nil {
+      return nil, err
+    }
+    return w.Bytes(), nil
 }
 ```
 

@@ -1,19 +1,23 @@
+<!-- omit in toc -->
 # L2 Blob Transaction
 
 <!-- START doctoc generated TOC please keep comment here to allow auto update -->
 <!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
 **Table of Contents**
 
-- [L2 Blob Transaction](#l2-blob-transaction)
-  - [Motivation](#motivation)
-  - [How It Works](#how-it-works)
-  - [Reference Implementation](#reference-implementation)
+- [Motivation](#motivation)
+- [How It Works](#how-it-works)
+- [Reference Implementation](#reference-implementation)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
 
 ## Motivation
 
-The proposal aims to integrate BLOB transaction support into the OP Stack. BLOB transactions are gaining popularity on Layer 1 (L1), with applications including BLOB inscriptions, Rollups (as an optional feature), and EthStorage. However, given the high costs associated with L1, it is crucial to implement BLOB transaction support in the OP Stack. This implementation would significantly reduce migration costs for projects and users looking to leverage BLOB transactions in a more cost-effective environment.
+The proposal aims to integrate BLOB transaction support into the OP Stack. BLOB transactions are gaining popularity on Layer 1 (L1), with applications including BLOB inscriptions, Rollups (as an optional feature), and EthStorage. However, none of the L2s (including OP Stack) supports BLOB transactions, resulting in high migration costs for these projects. To harvest the reduced gas costs of L2s with minimized migration costs of applications using BLOB transactions, it is of great value in OP Stack to support L2 BLOB transactions.
+
+To further reduce the DA cost of L2 BLOB transactions of OP Stack, the proposal offers a hybrid DA solution, where the L2 BLOBs may use a different DA (e.g., DA committee or DA challenge) as that of L2 calldata (generally L1 DA).  This better serves the applications with demands on different data values with lower costs:
+- For transactions with high-value data (e.g., swap in Uniswap), the users can use non-BLOB L2 transactions.
+- For transactions with low-value data (e.g., NFT images/inscriptions), the users can use BLOB L2 transactions at a lower cost.
 
 ## How It Works
 

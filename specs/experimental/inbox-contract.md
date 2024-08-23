@@ -7,20 +7,23 @@
 - [Motivation](#motivation)
 - [How It Works](#how-it-works)
 - [Supporting Dynamic Updates to Inbox Address](#supporting-dynamic-updates-to-inbox-address)
-  - [SystemConfig](#systemconfig)
+  - [SystemConfigInterop](#systemconfiginterop)
     - [setBatchInbox](#setbatchinbox)
-    - [initialize](#initialize)
-    - [UpdateType](#updatetype)
-  - [L1 Info Deposit Transaction](#l1-info-deposit-transaction)
-  - [L1Block](#l1block)
+  - [L1BlockInterop](#l1blockinterop)
     - [batchInbox](#batchinbox)
-    - [setL1BlockValuesEcotone](#setl1blockvaluesecotone)
+    - [ConfigType](#configtype)
+    - [setConfig](#setconfig)
+  - [StaticConfig](#staticconfig)
+    - [encodeSetBatchInbox](#encodesetbatchinbox)
+    - [decodeSetBatchInbox](#decodesetbatchinbox)
+  - [L2Client.SystemConfigByL2Hash](#l2clientsystemconfigbyl2hash)
+  - [L1Traversal.AdvanceL1Block](#l1traversaladvancel1block)
   - [How `op-node` knows the canonical batch inbox](#how-op-node-knows-the-canonical-batch-inbox)
   - [How `op-batcher` knows canonical batch inbox](#how-op-batcher-knows-canonical-batch-inbox)
 - [Upgrade](#upgrade)
   - [L1Block Deployment](#l1block-deployment)
   - [L1Block Proxy Update](#l1block-proxy-update)
-  - [SystemConfig Upgrade](#systemconfig-upgrade)
+  - [SystemConfigInterop Upgrade](#systemconfiginterop-upgrade)
 - [Security Considerations](#security-considerations)
   - [Inbox Sender](#inbox-sender)
 - [Reference Implementation](#reference-implementation)
@@ -55,178 +58,125 @@ These modifications aim to enhance the security and efficiency of the batch subm
 
 ## Supporting Dynamic Updates to Inbox Address
 
-### SystemConfig
+### SystemConfigInterop
 
-The `SystemConfig` is the source of truth for the address of inbox. It stores information about the inbox address and passes the information to L2 as well. 
+The `SystemConfigInterop` is the source of truth for the address of inbox. It stores information about the inbox address and passes the information to L2 as well. 
 
 
 #### setBatchInbox
 
-A new function `setBatchInbox` is introduced to the `SystemConfig` contract, enabling dynamic updates to the inbox:
+A new function `setBatchInbox` is introduced to the `SystemConfigInterop` contract, enabling dynamic updates to the inbox:
 
 ```solidity
 /// @notice Updates the batch inbox address. Can only be called by the owner.
 /// @param _batchInbox New batch inbox address.
 function setBatchInbox(address _batchInbox) external onlyOwner {
-    _setBatchInbox(_batchInbox);
-}
-
-/// @notice Updates the batch inbox address.
-/// @param _batchInbox New batch inbox address.
-function _setBatchInbox(address _batchInbox) internal {
-    Storage.setAddress(BATCH_INBOX_SLOT, _batchInbox);
-
-    bytes memory data = abi.encode(_batchInbox);
-    emit ConfigUpdate(VERSION, UpdateType.BATCH_INBOX, data);
-}
-
-```
-
-
-#### initialize
-
-The `SystemConfig` now emits an event when the inbox is initialized, while retaining its existing support for inbox configuration during initialization.
-
-```solidity
-function initialize(
-    address _owner,
-    uint32 _basefeeScalar,
-    uint32 _blobbasefeeScalar,
-    bytes32 _batcherHash,
-    uint64 _gasLimit,
-    address _unsafeBlockSigner,
-    ResourceMetering.ResourceConfig memory _config,
-    address _batchInbox,
-    SystemConfig.Addresses memory _addresses
-)
-    public
-    initializer
-{
-    ...
-    // Storage.setAddress(BATCH_INBOX_SLOT, _batchInbox);
-    // initialize inbox by `_setBatchInbox` so that an event is emitted.
-    _setBatchInbox(_batchInbox);
-    ...
+    if (_batchInbox != batchInbox()) {
+        Storage.setAddress(BATCH_INBOX_SLOT, _batchInbox);
+        OptimismPortal(payable(optimismPortal())).setConfig(
+            ConfigType.SET_BATCH_INBOX,
+            StaticConfig.encodeSetBatchInbox({
+                _batchInbox: _batchInbox,
+            })
+        );
+    }
 }
 ```
 
-#### UpdateType
 
-A new enum value `BATCH_INBOX` is added to the `UpdateType` enumeration.
 
-```solidity
-enum UpdateType {
-    BATCHER,
-    GAS_CONFIG,
-    GAS_LIMIT,
-    UNSAFE_BLOCK_SIGNER,
-    BATCH_INBOX
-}
-```
+### L1BlockInterop
 
-### L1 Info Deposit Transaction
-
-The [`L1InfoDeposit`](https://github.com/ethereum-optimism/optimism/blob/5e317379fae65b76f5a6ee27581f0e62d2fe017a/op-node/rollup/derive/l1_block_info.go#L264) function creates a L1 Info deposit transaction based on the L1 block. It is extended to add an additional `batchInbox` parameter for the [`setL1BlockValuesEcotone`](https://github.com/ethereum-optimism/optimism/blob/5e317379fae65b76f5a6ee27581f0e62d2fe017a/packages/contracts-bedrock/src/L2/L1Block.sol#L136) function after the inbox contract feature is activated.
-
-```golang
-func L1InfoDeposit(rollupCfg *rollup.Config, sysCfg eth.SystemConfig, seqNumber uint64, block eth.BlockInfo, l2BlockTime uint64) (*types.DepositTx, error) {
-    ...
-    if isInboxForkButNotFirstBlock(rollupCfg, l2BlockTime) {
-        l1BlockInfo.BatchInbox = sysCfg.BatchInbox
-        l1BlockInfo.BlobBaseFee = block.BlobBaseFee()
-        if l1BlockInfo.BlobBaseFee == nil {
-          // The L2 spec states to use the MIN_BLOB_GASPRICE from EIP-4844 if not yet active on L1.
-          l1BlockInfo.BlobBaseFee = big.NewInt(1)
-        }
-        scalars, err := sysCfg.EcotoneScalars()
-        if err != nil {
-          return nil, err
-        }
-        l1BlockInfo.BlobBaseFeeScalar = scalars.BlobBaseFeeScalar
-        l1BlockInfo.BaseFeeScalar = scalars.BaseFeeScalar
-        // marshalBinaryInboxFork adds an additional `batchInbox` parameter based on marshalBinaryEcotone.
-        out, err := l1BlockInfo.marshalBinaryInboxFork()
-        if err != nil {
-          return nil, fmt.Errorf("failed to marshal InboxFork l1 block info: %w", err)
-        }
-        data = out
-    } else if isEcotoneButNotFirstBlock(rollupCfg, l2BlockTime) {
-    ...
-}
-```
-
-The `marshalBinaryInboxFork` function is added to [`L1BlockInfo`](https://github.com/ethereum-optimism/optimism/blob/5e317379fae65b76f5a6ee27581f0e62d2fe017a/op-node/rollup/derive/l1_block_info.go#L41). This new function incorporates an additional `batchInbox` parameter for the [`setL1BlockValuesEcotone`](https://github.com/ethereum-optimism/optimism/blob/5e317379fae65b76f5a6ee27581f0e62d2fe017a/packages/contracts-bedrock/src/L2/L1Block.sol#L136) function:
-
-```golang
-func (info *L1BlockInfo) marshalBinaryInboxFork() ([]byte, error) {
-    w := bytes.NewBuffer(make([]byte, 0, L1InfoEcotoneLen))
-    if err := solabi.WriteSignature(w, L1InfoFuncEcotoneBytes4); err != nil {
-      return nil, err
-    }
-    if err := binary.Write(w, binary.BigEndian, info.BaseFeeScalar); err != nil {
-      return nil, err
-    }
-    if err := binary.Write(w, binary.BigEndian, info.BlobBaseFeeScalar); err != nil {
-      return nil, err
-    }
-    if err := binary.Write(w, binary.BigEndian, info.SequenceNumber); err != nil {
-      return nil, err
-    }
-    if err := binary.Write(w, binary.BigEndian, info.Time); err != nil {
-      return nil, err
-    }
-    if err := binary.Write(w, binary.BigEndian, info.Number); err != nil {
-      return nil, err
-    }
-    if err := solabi.WriteUint256(w, info.BaseFee); err != nil {
-      return nil, err
-    }
-    blobBasefee := info.BlobBaseFee
-    if blobBasefee == nil {
-      blobBasefee = big.NewInt(1) // set to 1, to match the min blob basefee as defined in EIP-4844
-    }
-    if err := solabi.WriteUint256(w, blobBasefee); err != nil {
-      return nil, err
-    }
-    if err := solabi.WriteHash(w, info.BlockHash); err != nil {
-      return nil, err
-    }
-    // ABI encoding will perform the left-padding with zeroes to 32 bytes, matching the "batcherHash" SystemConfig format and version 0 byte.
-    if err := solabi.WriteAddress(w, info.BatcherAddr); err != nil {
-      return nil, err
-    }
-    // This is where marshalBinaryInboxFork differs from marshalBinaryEcotone
-    if err := solabi.WriteAddress(w, info.BatchInbox); err != nil {
-      return nil, err
-    }
-    return w.Bytes(), nil
-}
-```
-
-### L1Block
-
-The `L1Block` stores Layer 1 (L1) related information on Layer 2 (L2). It is extended to store the dynamic inbox address.
+The `L1BlockInterop` stores Layer 1 (L1) related information on Layer 2 (L2). It is extended to store the dynamic inbox address.
 
 #### batchInbox
 
-A new field `batchInbox` is added to the `L1Block`:
+A new field `batchInbox` is added to the `L1BlockInterop`:
 
 ```solidity
     /// @notice The canonical batch inbox.
     bytes32 public batchInbox;
 ```
 
-#### setL1BlockValuesEcotone
+#### ConfigType
 
-This function stores Layer 1 (L1) block values for Layer 2 (L2) since the Ecotone upgrade of the OP Stack. It is enhanced to also store the inbox address.
+A new enum value `SET_BATCH_INBOX` is added to the `ConfigType` enumeration.
 
 ```solidity
-function setL1BlockValuesEcotone() external {
+enum ConfigType {
+    SET_GAS_PAYING_TOKEN,
+    ADD_DEPENDENCY,
+    REMOVE_DEPENDENCY,
+    SET_BATCH_INBOX
+}
+```
+
+
+#### setConfig
+
+This function stores Layer 1 (L1) system configs for Layer 2 (L2). It is extended to support the newly introduced `SET_BATCH_INBOX` ConfigType.
+
+```solidity
+function setConfig(ConfigType _type, bytes calldata _value) external {
     ...
-    sstore(batchInbox.slot, calldataload(164)) // bytes32
+    else if (_type == ConfigType.SET_BATCH_INBOX) {
+        _setBatchInbox(_value);
+    }
 }
 
+/// @notice Internal method to set the batch inbox address.
+/// @param _value The encoded value with which to set the batch inbox address.
+function _setBatchInbox(bytes calldata _value) internal {
+    batchInbox = StaticConfig.decodeSetBatchInbox(_value);
+}
 ```
+
+### StaticConfig
+
+The `StaticConfig` library is used for encoding and decoding static configuration data.
+
+#### encodeSetBatchInbox
+
+This function is used on L1 to encode the static configuration data for setting a batch inbox.
+
+```solidity
+/// @notice Encodes the static configuration data for setting a batch inbox.
+/// @param _batchInbox Address of the batch inbox.
+/// @return Encoded static configuration data.
+function encodeSetBatchInbox(address _batchInbox) internal pure returns (bytes memory) {
+    return abi.encode(_batchInbox);
+}
+```
+
+#### decodeSetBatchInbox
+
+This function is used on L2 to decode the static configuration data for setting a batch inbox.
+
+```solidity
+/// @notice Decodes the static configuration data for setting a batch inbox.
+/// @param _data Encoded static configuration data.
+/// @return Decoded Address of the batch inbox.
+function decodeSetBatchInbox(bytes memory _data) internal pure returns (address) {
+    return abi.decode(_data, (address));
+}
+```
+
+### L2Client.SystemConfigByL2Hash
+
+This function is used to retrieve the system configuration for a specific L2 block hash. Prior to the fork, this information was obtained from the deposit transaction. However, post-fork, it should be read from the L2 state instead, in accordance with the concepts outlined in [this issue](https://github.com/ethereum-optimism/specs/issues/122).
+
+### L1Traversal.AdvanceL1Block
+
+This function is used to fetch the next L1 block. Its behavior differs pre- and post-fork:
+
+Pre-fork:
+- It internally caches the post-state of the system configuration for the current L1 block.
+- This cached configuration is then utilized by `DataAvailabilitySource.OpenData` to derive batches, as seen [here](https://github.com/ethereum-optimism/optimism/blob/0cf2a11611d329b9c6d53fd6473dbbc44f68e94c/op-node/rollup/derive/l1_retrieval.go#L57).
+
+Post-fork:
+- It consistently reads the system configuration from the L2 state of the parent block.
+
+
 
 ### How `op-node` knows the canonical batch inbox
 
@@ -246,7 +196,7 @@ Immediately before submitting a new batch, `op-batcher` fetches the current inbo
 
 ## Upgrade
 
-The custom gas token upgrade is not yet defined to be part of a particular network upgrade, but it will be scheduled as part of a future hardfork. On the network upgrade block, a set of deposit transaction based upgrade transactions are deterministically generated by the derivation pipeline in the following order:
+The inbox contract upgrade is not yet defined to be part of a particular network upgrade, but it will be scheduled as part of a future hardfork. On the network upgrade block, a set of deposit transaction based upgrade transactions are deterministically generated by the derivation pipeline in the following order:
 
 - L1 Attributes Transaction calling `setL1BlockValuesEcotone`
 - User deposits from L1
@@ -289,9 +239,9 @@ RPC access to the derivation pipeline and make the upgrade transactions non dete
 - `data`: TODO
 - `sourceHash`: TODO
 
-### SystemConfig Upgrade
+### SystemConfigInterop Upgrade
 
-Finally, to dynamically change the inbox address, `SystemConfig` on L1 will be upgraded to accept a new inbox address.
+Finally, to dynamically change the inbox address, `SystemConfigInterop` on L1 will be upgraded to accept a new inbox address.
 
 Note that according to the [Optimism Style Guide](https://github.com/ethereum-optimism/optimism/blob/9d31040ecf8590423adf267ad24b03bc1bf7273b/packages/contracts-bedrock/STYLE_GUIDE.md), The process for upgrading the implementation is as follows:
 1. Upgrade the implementation to the `StorageSetter` contract.

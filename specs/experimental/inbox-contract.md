@@ -167,26 +167,25 @@ This function is used to retrieve the system configuration for a specific L2 blo
 
 ### L1Traversal.AdvanceL1Block
 
-This function is used to fetch the next L1 block. Its behavior differs pre- and post-fork:
+This function is used to fetch the next L1 block. It also caches the up-to-date `SystemConfig` by iteratively applying the `SystemConfig` updates in each L1 block. The way it retrieves the `SystemConfig` updates differs pre- and post-fork:
 
 Pre-fork:
-- It internally caches the post-state of the system configuration for the current L1 block.
-- This cached configuration is then utilized by `DataAvailabilitySource.OpenData` to derive batches, as seen [here](https://github.com/ethereum-optimism/optimism/blob/0cf2a11611d329b9c6d53fd6473dbbc44f68e94c/op-node/rollup/derive/l1_retrieval.go#L57).
+- It retrieves the `SystemConfig` updates by parsing the [`ConfigUpdate`](https://github.com/ethereum-optimism/optimism/blob/f20b92d3eb379355c876502c4f28e72a91ab902f/packages/contracts-bedrock/src/L1/SystemConfig.sol#L124) event.
 
 Post-fork:
-- It consistently reads the system configuration from the L2 state of the parent block.
+- It retrieves the `SystemConfig` updates by parsing the `TransactionDeposited` event emitted by [`OptimismPortalInterop.setConfig`](https://github.com/ethereum-optimism/optimism/blob/f20b92d3eb379355c876502c4f28e72a91ab902f/packages/contracts-bedrock/src/L1/OptimismPortalInterop.sol#L41) function. 
+- It needs to parse the `SystemConfig` values according to [`ConfigType`](https://github.com/ethereum-optimism/optimism/blob/f20b92d3eb379355c876502c4f28e72a91ab902f/packages/contracts-bedrock/src/L2/L1BlockInterop.sol#L14), similar to [`L1BlockInterop.setConfig`](https://github.com/ethereum-optimism/optimism/blob/f20b92d3eb379355c876502c4f28e72a91ab902f/packages/contracts-bedrock/src/L2/L1BlockInterop.sol#L59).
 
 
 
 ### How `op-node` knows the canonical batch inbox
 
-We define that the canonical batch inbox at a specific L2 block is the batch inbox of `SystemConfig` of the origin of the L2 block.
+We define that the canonical batch inbox at a specific L2 block is the batch inbox of `SystemConfig` for the origin of the L2 block.
 
 Under normal conditions, `op-node` knows the canonical batch inbox through the derivation pipeline:
-1. The `L1Traversal` component first identifies the L1 `SystemConfig` changes while traversing the L1 block, via [`UpdateSystemConfigWithL1Receipts`](https://github.com/ethereum-optimism/optimism/blob/71928829ca7ece48152159daa1d231eac2df03b3/op-node/rollup/derive/l1_traversal.go#L78).
-   1. The [`ProcessSystemConfigUpdateLogEvent`](https://github.com/ethereum-optimism/optimism/blob/71928829ca7ece48152159daa1d231eac2df03b3/op-node/rollup/derive/system_config.go#L59) function will be modified to parse the newly added inbox change.
+1. The `L1Traversal` component first identifies the L1 `SystemConfig` updates and caches the up-to-date `SystemConfig` while traversing the L1 block, via [`UpdateSystemConfigWithL1Receipts`](https://github.com/ethereum-optimism/optimism/blob/71928829ca7ece48152159daa1d231eac2df03b3/op-node/rollup/derive/l1_traversal.go#L78).
 2. The `L1Retrieval` component then fetches the canonical batch inbox from the `L1Traversal` componenet and [pass](https://github.com/ethereum-optimism/optimism/blob/71928829ca7ece48152159daa1d231eac2df03b3/op-node/rollup/derive/l1_retrieval.go#L57) it to the `DataSourceFactory` component, via `OpenData` function, similar to how [`SystemConfig.BatcherAddr`](https://github.com/ethereum-optimism/optimism/blob/71928829ca7ece48152159daa1d231eac2df03b3/op-service/eth/types.go#L382) is handled.
-3. The `FetchingAttributesBuilder` component is updated to incorporate the canonical batch inbox into the `DepositTx`, via [`L1InfoDeposit`](https://github.com/ethereum-optimism/optimism/blob/71928829ca7ece48152159daa1d231eac2df03b3/op-node/rollup/derive/l1_block_info.go#L263). This modified `DepositTx` is subsequently used to obtain the `SystemConfig` during L2 chain reorganization.
+3. The `FetchingAttributesBuilder` component will convert `SystemConfig` updates into deposit transactions via [`DeriveDeposits`](https://github.com/ethereum-optimism/optimism/blob/f20b92d3eb379355c876502c4f28e72a91ab902f/op-node/rollup/derive/attributes.go#L70). After the deposit transactions are executed, the `SystemConfig` will be persisted in L2 state.
 
 During L2 reorganization, `op-node` knows the canonical batch inbox using the `SystemConfig` parameter of [`ResettableStage.Reset(context.Context, eth.L1BlockRef, eth.SystemConfig)`](https://github.com/ethereum-optimism/optimism/blob/71928829ca7ece48152159daa1d231eac2df03b3/op-node/rollup/derive/pipeline.go#L38) function, where `SystemConfig` is derived from the `DepositTx` of the corresponding L2 block.
 
